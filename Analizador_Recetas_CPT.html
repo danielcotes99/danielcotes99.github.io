@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Analizador de Recetas CPT — IA Clínica</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f0f4f8;padding:1rem}
+.box{max-width:820px;margin:0 auto;background:#fff;border-radius:12px;padding:1.5rem;box-shadow:0 2px 10px rgba(0,0,0,.1)}
+h1{font-size:18px;font-weight:600;color:#1a4a7a;margin-bottom:4px}
+.sub{font-size:13px;color:#666;margin-bottom:1.2rem}
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:1.2rem}
+.card{background:#f0f4f8;border-radius:8px;padding:.6rem;text-align:center}
+.card-l{font-size:10px;color:#888;text-transform:uppercase}
+.card-v{font-size:20px;font-weight:600;color:#1a4a7a;margin-top:2px}
+.card-v.w{color:#e07b00} .card-v.g{color:#1a7a4a} .card-v.r{color:#c0392b}
+.upload{border:2px dashed #b0c4de;border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;background:#f8faff;margin-bottom:1rem}
+.upload:hover{background:#eef4ff}
+.upload p{font-size:13px;color:#666;margin-top:.4rem}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:.5rem 1rem;border:1px solid #b0c4de;border-radius:8px;background:#fff;font-size:13px;font-weight:500;cursor:pointer;color:#1a4a7a}
+.btn:hover{background:#eef4ff} .btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.p{background:#1a4a7a;color:#fff;border-color:#1a4a7a} .btn.p:hover{background:#15406a}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem}
+.prog{margin-bottom:1rem}
+.prog-bg{height:10px;background:#e0e8f0;border-radius:5px;overflow:hidden;margin-top:4px}
+.prog-fill{height:100%;background:#1a4a7a;border-radius:5px;transition:width .3s}
+.prow{display:flex;justify-content:space-between;font-size:12px;color:#555}
+.log{background:#1a1a2e;border-radius:8px;padding:.75rem;max-height:180px;overflow-y:auto;font-size:11px;font-family:monospace;color:#ccc;margin-bottom:1rem}
+.ok{color:#6fcf97} .err{color:#eb5757} .inf{color:#56ccf2}
+.dl{background:#e8f5e9;border:1px solid #a5d6a7;border-radius:10px;padding:1rem 1.2rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-top:1rem}
+.dl strong{color:#1a4a7a;font-size:14px;display:block;margin-bottom:2px}
+.dl p{font-size:12px;color:#555}
+.divider{height:1px;background:#e0e8f0;margin:1rem 0}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>🏥 Analizador de Recetas CPT con IA Clínica</h1>
+  <p class="sub">Genera recetas clínicamente correctas para cada CPT usando conocimiento médico real | Hospital Pacífica Salud</p>
+
+  <div class="cards">
+    <div class="card"><div class="card-l">CPTs</div><div class="card-v" id="kTotal">—</div></div>
+    <div class="card"><div class="card-l">Procesados</div><div class="card-v g" id="kDone">0</div></div>
+    <div class="card"><div class="card-l">Con receta</div><div class="card-v g" id="kOK">0</div></div>
+    <div class="card"><div class="card-l">Para revisión</div><div class="card-v w" id="kRev">0</div></div>
+    <div class="card"><div class="card-l">Errores</div><div class="card-v r" id="kErr">0</div></div>
+  </div>
+
+  <div style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:.5rem">Paso 1 — Carga el archivo de datos</div>
+  <div class="upload" id="dz" onclick="document.getElementById('fi').click()">
+    <div style="font-size:32px">📂</div>
+    <p><strong>Haz clic</strong> o arrastra el archivo <code>ai_payloads.json</code></p>
+  </div>
+  <input type="file" id="fi" accept=".json" style="display:none">
+
+  <div class="divider"></div>
+  <div style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:.5rem">Paso 2 — Ejecuta el análisis con IA</div>
+  <div class="btn-row">
+    <button class="btn p" id="bStart" disabled onclick="start()">▶ Iniciar análisis clínico IA</button>
+    <button class="btn" id="bPause" disabled onclick="pause()">⏸ Pausar</button>
+    <button class="btn" id="bResume" style="display:none" onclick="resume()">▶ Reanudar</button>
+    <button class="btn" onclick="reset()">↺ Reiniciar</button>
+  </div>
+
+  <div id="progWrap" style="display:none" class="prog">
+    <div class="prow"><span id="progLbl">Iniciando...</span><span id="progPct">0%</span></div>
+    <div class="prog-bg"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+  </div>
+
+  <div class="log" id="log" style="display:none"></div>
+
+  <div id="dlSection" style="display:none">
+    <div class="divider"></div>
+    <div class="dl">
+      <div>
+        <strong>✅ Análisis completado</strong>
+        <p id="dlSummary">Descarga los resultados para generar el Excel final.</p>
+      </div>
+      <button class="btn p" onclick="download()">⬇ Descargar ai_recipes.json</button>
+    </div>
+    <p style="font-size:11px;color:#888;margin-top:.6rem;text-align:center">Sube el archivo <strong>ai_recipes.json</strong> a la conversación con Claude para generar el Excel.</p>
+  </div>
+</div>
+
+<script>
+let payloads = null;
+let cptKeys  = [];
+let results  = {};
+let idx      = 0;
+let paused   = false;
+let running  = false;
+let nOK=0, nRev=0, nErr=0;
+
+const SYSTEM = `Eres un experto en cirugía y gestión de insumos quirúrgicos. Para cada código CPT que se te proporcione:
+
+1. Basándote en la descripción clínica del procedimiento, determina qué insumos de la lista son APROPIADOS para ese procedimiento.
+2. Determina los insumos que son clínicamente OBLIGATORIOS aunque ningún cirujano los haya anotado.
+3. Excluye insumos claramente incompatibles (ej: trocares en cirugía abierta, implantes ortopédicos en cesárea).
+4. Para insumos que son alternativas entre sí (ej: Ligasure vs Harmonic, trocar óptico vs estándar), incluye SOLO el más usado.
+
+REGLAS CLÍNICAS CRÍTICAS:
+- Apendicectomía LAPAROSCÓPICA: SÍ lleva Ligasure (hemostasia mesoapéndice), EndoGIA (transección apéndice), 3 trocares (1×12mm + 2×5mm). NO lleva bolsa colectora de Foley.
+- Apendicectomía ABIERTA: NO lleva trocares, NO lleva EndoGIA laparoscópica. SÍ lleva suturas de ligadura.
+- Colecistectomía LAPAROSCÓPICA: SÍ lleva EndoClip (NO Ligasure — los clips son el estándar para arteria y conducto cístico).
+- Histerectomía/Salpingooforectomía LAP: SÍ lleva Ligasure (NO EndoClip).
+- Funduplicatura: SÍ lleva Ligasure para vasos gástricos. NO lleva EndoGIA.
+- Herniorrafia laparoscópica: solo trocares + antiséptico. NO lleva Ligasure ni clip.
+- Cirugía robótica (-R): usa cobertores robóticos, trocares de 8mm robóticos.
+- Artroscopia: NO lleva trocares laparoscópicos, NO lleva Ligasure. SÍ lleva irrigación artroscópica.
+
+Responde SOLO con JSON, sin texto ni markdown:
+{"cpt":"XXXXX","receta":[{"i":"código completo del insumo","q":1,"f":"CONSENSO|OBLIGATORIO|EXCLUIR","nota":"razón breve"}],"revisar":false,"revisar_motivo":""}
+
+- f="CONSENSO": insumo usado por los cirujanos y apropiado
+- f="OBLIGATORIO": clínicamente necesario aunque no aparezca en datos
+- f="EXCLUIR": insumo en los datos pero incompatible — incluirlo con q=0 para documentar exclusión
+- revisar=true solo si hay señales graves de error de codificación CPT`;
+
+function log(msg, type='inf') {
+  const el = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = type; d.textContent = new Date().toLocaleTimeString()+' '+msg;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
+}
+
+function updateUI() {
+  const pct = cptKeys.length ? Math.round(idx/cptKeys.length*100) : 0;
+  document.getElementById('kDone').textContent  = idx;
+  document.getElementById('kOK').textContent    = nOK;
+  document.getElementById('kRev').textContent   = nRev;
+  document.getElementById('kErr').textContent   = nErr;
+  document.getElementById('progFill').style.width = pct+'%';
+  document.getElementById('progPct').textContent  = pct+'%';
+  document.getElementById('progLbl').textContent  = `CPT ${idx} de ${cptKeys.length}...`;
+}
+
+document.getElementById('fi').addEventListener('change', e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      payloads = JSON.parse(ev.target.result);
+      cptKeys  = Object.keys(payloads);
+      document.getElementById('kTotal').textContent = cptKeys.length;
+      document.getElementById('bStart').disabled = false;
+      document.getElementById('log').style.display = 'block';
+      log(`✓ Cargados ${cptKeys.length} CPTs`, 'ok');
+    } catch(e){ alert('Error: '+e.message); }
+  };
+  r.readAsText(f);
+});
+
+const dz = document.getElementById('dz');
+dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.background='#e8f0ff'; });
+dz.addEventListener('dragleave', ()=>{ dz.style.background=''; });
+dz.addEventListener('drop', e=>{ e.preventDefault(); dz.style.background='';
+  const f=e.dataTransfer.files[0]; if(!f) return;
+  const dt=new DataTransfer(); dt.items.add(f);
+  document.getElementById('fi').files=dt.files;
+  document.getElementById('fi').dispatchEvent(new Event('change')); });
+
+function buildPrompt(cpt) {
+  const p = payloads[cpt];
+  const top = p.ins.slice(0,35).map(x=>`${x.pct}% qty=${x.q} "${x.i}"`).join('\n');
+  return `CPT ${cpt}: ${p.desc}
+Familia: ${p.fam} | Cirujanos: ${p.ns}
+Insumos usados (% de cirujanos que lo usan, cantidad mediana):
+${top}`;
+}
+
+async function callAI(cpt) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01'},
+    body: JSON.stringify({
+      model:'claude-sonnet-4-20250514', max_tokens:1500,
+      system: SYSTEM,
+      messages:[{role:'user', content: buildPrompt(cpt)}]
+    })
+  });
+  if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const data = await resp.json();
+  let text = (data.content?.[0]?.text||'{}').trim();
+  if(text.startsWith('```')) text = text.replace(/^```[a-z]*\n?/,'').replace(/\n?```$/,'');
+  return JSON.parse(text);
+}
+
+async function start() {
+  if(running) return;
+  running=true; paused=false;
+  document.getElementById('bStart').disabled=true;
+  document.getElementById('bPause').disabled=false;
+  document.getElementById('progWrap').style.display='block';
+
+  log(`Iniciando análisis clínico IA de ${cptKeys.length} CPTs...`);
+
+  for(let i=idx; i<cptKeys.length; i++) {
+    if(!running) break;
+    while(paused) await new Promise(r=>setTimeout(r,500));
+    const cpt = cptKeys[i];
+    try {
+      const res = await callAI(cpt);
+      results[cpt] = res;
+      if(res.revisar) nRev++; else nOK++;
+      if(i%10===0) log(`✓ ${cpt}: ${res.receta?.length||0} insumos${res.revisar?' [REVISAR]':''}`, res.revisar?'inf':'ok');
+    } catch(e) {
+      nErr++;
+      results[cpt] = {cpt, receta:[], revisar:true, revisar_motivo:`Error API: ${e.message}`};
+      if(i%5===0) log(`✗ ${cpt}: ${e.message}`, 'err');
+    }
+    idx=i+1; updateUI();
+    await new Promise(r=>setTimeout(r,400));
+  }
+
+  running=false;
+  document.getElementById('bPause').disabled=true;
+  document.getElementById('dlSection').style.display='block';
+  document.getElementById('dlSummary').textContent =
+    `${Object.keys(results).length} CPTs analizados · ${nOK} con receta · ${nRev} para revisión · ${nErr} errores`;
+  log(`✅ Completado: ${nOK} recetas, ${nRev} para revisión, ${nErr} errores`, 'ok');
+}
+
+function pause() {
+  paused=true;
+  document.getElementById('bPause').style.display='none';
+  document.getElementById('bResume').style.display='inline-flex';
+  log('⏸ Pausado');
+}
+function resume() {
+  paused=false;
+  document.getElementById('bPause').style.display='inline-flex';
+  document.getElementById('bResume').style.display='none';
+  log('▶ Reanudado');
+}
+function reset() {
+  running=false; paused=false; idx=0; nOK=0; nRev=0; nErr=0;
+  results={}; payloads=null; cptKeys=[];
+  ['kTotal','kDone','kOK','kRev','kErr'].forEach(id=>document.getElementById(id).textContent='0');
+  document.getElementById('kTotal').textContent='—';
+  document.getElementById('bStart').disabled=true;
+  document.getElementById('bPause').disabled=true;
+  document.getElementById('progWrap').style.display='none';
+  document.getElementById('dlSection').style.display='none';
+  document.getElementById('log').innerHTML='';
+  document.getElementById('progFill').style.width='0%';
+  document.getElementById('fi').value='';
+}
+function download() {
+  const blob=new Blob([JSON.stringify({results,meta:{total:Object.keys(results).length,ok:nOK,rev:nRev,err:nErr,ts:new Date().toISOString()}},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='ai_recipes.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
